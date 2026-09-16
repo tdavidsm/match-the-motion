@@ -103,7 +103,8 @@
 <div class="wrap">
   <header>
     <div class="title"><span class="car">🚗</span> Match the Motion</div>
-    <button class="help" id="helpBtn">❔ How to play</button>
+    <button class="help" id="superBtn">🔥 Super Challenge</button>
+    <button class="help" id="helpBtn" style="margin-left:0">❔ How to play</button>
   </header>
 
   <div class="progress" id="progress"></div>
@@ -124,6 +125,7 @@
       <button class="btn" id="startBtn">▶ Start</button>
       <button class="btn sec" id="showBtn">👀 Show me</button>
       <button class="btn sec" id="newBtn">🔀 New graph</button>
+      <button class="btn" id="stopBtn" style="display:none;background:var(--bad);color:#2a0d0d">⏹ Stop run</button>
       <div class="status" id="status"></div>
       <div class="result" id="result">
         <div class="rtitle" id="rTitle"></div>
@@ -141,6 +143,38 @@
       <span>Car position: <b id="posRead">0.0 m</b></span>
       <span>Time: <b id="timeRead">0.0 s</b></span>
     </div>
+  </div>
+</div>
+
+<!-- super challenge: pick a mode -->
+<div class="modal" id="superModal">
+  <div class="box">
+    <div class="congrats-emoji">🔥</div>
+    <h2 style="text-align:center">Super Challenge</h2>
+    <p>An <b>endless run</b>. The graph scrolls by and never stops — keep the car on the line. Move when it moves;
+      hold still <b>only</b> during the flat "rest" sections between challenges. Drift off for too long and the run ends.</p>
+    <p style="text-align:center">Your best run so far: <b id="supBestEntry">0 s</b></p>
+    <p style="text-align:center;color:var(--muted)">Choose your graph:</p>
+    <div class="row2">
+      <button class="btn" id="supPos">📈 Position run</button>
+      <button class="btn" id="supVel">📉 Velocity run</button>
+    </div>
+    <button class="btn sec" id="supClose" style="width:100%;margin-top:10px">Back</button>
+  </div>
+</div>
+
+<!-- super challenge: run over -->
+<div class="modal" id="superOverModal">
+  <div class="box">
+    <div class="congrats-emoji">🏁</div>
+    <h2 style="text-align:center">Run over!</h2>
+    <p style="text-align:center;font-size:1.2rem">You lasted <b id="supRun">0 s</b>.</p>
+    <p style="text-align:center">Best run: <b id="supBest">0 s</b> — your best goes into your completion code.</p>
+    <div class="row2">
+      <button class="btn" id="supAgain">🔁 Run again</button>
+      <button class="btn sec" id="supSwitch">Switch graph</button>
+    </div>
+    <button class="btn sec" id="supBack" style="width:100%;margin-top:10px">Back to game</button>
   </div>
 </div>
 
@@ -185,7 +219,7 @@
     <button class="btn" id="turninBtn" style="width:100%;margin-top:12px">📨 Turn it in</button>
     <div class="turnin" style="margin-top:12px">Tapping <b>Turn it in</b> opens your class form with your name and code
       already filled — just press <b>Submit</b>. (No form opens? Screenshot this page instead.) Your initials are in the
-      <b>3rd</b> and <b>6th</b> spots of the code.</div>
+      <b>3rd</b> and <b>6th</b> spots, and the number after <b>-R</b> is your best Super Challenge run (in seconds).</div>
     <div class="row2">
       <button class="btn sec" id="copyBtn">Copy code</button>
       <button class="btn sec" id="againBtn">Play again</button>
@@ -210,6 +244,9 @@ let stars=null, starsW=0;
 const WIN_TARGET=7;
 const state={ phase:'warm', warmI:0, end:{pass:0,shown:0},
   warmSeq:[{t:'pt',a:false},{t:'pt',a:true},{t:'vt',a:false},{t:'vt',a:true}] };
+let bestRun=(()=>{ try{ return +localStorage.getItem('mm_bestRun')||0; }catch(_){ return 0; } })();
+const SUP={on:false};      // Super Challenge (endless runner) — see the Super Challenge section
+const lerp=(a,b,t)=>a+(b-a)*t;
 let cur=null;            // current target + run data
 let curX=0;              // car world position
 let pointerDown=false, pointerWorldX=0;
@@ -435,9 +472,9 @@ function redraw(tNow){ drawScene(); drawGraph(tNow||0); $('#timeRead').textConte
 function updPointer(e){ const r=sceneCv.getBoundingClientRect();
   pointerWorldX=clamp((e.clientX-r.left-SCN.cx)/SCN.scale,XMIN,XMAX); }
 sceneCv.addEventListener('pointerdown',e=>{ e.preventDefault(); try{sceneCv.setPointerCapture(e.pointerId);}catch(_){}
-  pointerDown=true; updPointer(e); curX=pointerWorldX; if(cur.phaseRun!=='run') redraw(cur.phaseRun==='done'?cur.T:0); });
+  pointerDown=true; updPointer(e); curX=pointerWorldX; if(!SUP.on && cur.phaseRun!=='run') redraw(cur.phaseRun==='done'?cur.T:0); });
 sceneCv.addEventListener('pointermove',e=>{ if(!pointerDown)return; e.preventDefault(); updPointer(e); curX=pointerWorldX;
-  if(cur.phaseRun!=='run') redraw(cur.phaseRun==='done'?cur.T:0); });
+  if(!SUP.on && cur.phaseRun!=='run') redraw(cur.phaseRun==='done'?cur.T:0); });
 sceneCv.addEventListener('pointerup',()=>{ pointerDown=false; });
 sceneCv.addEventListener('pointercancel',()=>{ pointerDown=false; });
 
@@ -553,7 +590,7 @@ let lastName='', lastCode='';
 function showWin(){ $('#nameField').value=''; $('#nameErr').textContent=''; $('#nameModal').classList.add('show'); setTimeout(()=>$('#nameField').focus(),50); }
 $('#codeBtn').onclick=()=>{ const name=$('#nameField').value.trim();
   if(name.replace(/[^A-Za-z]/g,'').length<2){ $('#nameErr').textContent='Please enter your first and last name.'; return; }
-  const code=makeCode(name); lastName=name; lastCode=code; $('#winName').textContent=name.split(/\s+/)[0];
+  const code=makeCode(name)+'-R'+Math.round(bestRun); lastName=name; lastCode=code; $('#winName').textContent=name.split(/\s+/)[0];
   $('#codeOut').textContent=code; $('#nameModal').classList.remove('show'); $('#winModal').classList.add('show'); };
 $('#turninBtn').onclick=()=>{ if(!lastCode)return; window.open(turnInURL(lastName,lastCode),'_blank','noopener'); };
 $('#nameField').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#codeBtn').click(); });
@@ -562,6 +599,82 @@ $('#copyBtn').onclick=()=>{ const code=$('#codeOut').textContent;
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done,done); else done(); };
 $('#againBtn').onclick=()=>{ $('#winModal').classList.remove('show'); state.phase='warm'; state.warmI=0; state.end={pass:0,shown:0}; loadTask(); };
 
+/* ========== Super Challenge — endless scrolling runner ========== */
+const SHOW_PAST=3, SHOW_FUT=3.2;
+function saveBest(v){ bestRun=Math.max(bestRun, v); try{ localStorage.setItem('mm_bestRun', String(Math.round(bestRun))); }catch(_){} }
+function supLastEnd(){ const S=SUP.segs; if(!S.length) return {t:0,x:0,v:0}; const l=S[S.length-1];
+  return {t:l.t0+l.d, x:l.x0+(l.v0+l.v1)/2*l.d, v:l.v1}; }
+function streamAt(t){ const S=SUP.segs; if(!S.length) return {x:0,v:0};
+  if(t<=S[0].t0) return {x:S[0].x0, v:S[0].v0};
+  for(const s of S){ if(t< s.t0+s.d+1e-9){ const tau=Math.max(0,t-s.t0), a=(s.v1-s.v0)/s.d; return {x:s.x0+s.v0*tau+0.5*a*tau*tau, v:s.v0+(s.v1-s.v0)*(tau/s.d)}; } }
+  const l=S[S.length-1]; return {x:l.x0+(l.v0+l.v1)/2*l.d, v:l.v1}; }
+function supAppendRest(){ const e=supLastEnd(), diff=Math.min(1,SUP.elapsed/60), d=lerp(1.6,0.7,diff)+Math.random()*0.4;
+  SUP.segs.push({t0:e.t,d,v0:0,v1:0,x0:e.x,kind:'rest'}); }             // a "sit still" transition
+function supAppendMove(){ const e=supLastEnd(), diff=Math.min(1,SUP.elapsed/60);
+  const rampD=lerp(1.1,0.7,diff), holdD=(Math.random()<0.55?lerp(0.9,0.35,diff):0);
+  const Vmax=lerp(2,3,diff); let V=rnd([1,1.5,2,2.5,3].filter(v=>v<=Vmax+1e-6));
+  let dir = e.x>1.5?-1 : e.x<-1.5?1 : (Math.random()<0.5?1:-1); V*=dir;
+  if(Math.abs(e.x+V*(rampD+holdD))>8.3) V=-V;                          // keep the car on screen
+  let t0=e.t,x0=e.x; const push=(d,v0,v1)=>{ SUP.segs.push({t0,d,v0,v1,x0,kind:'move'}); x0+=(v0+v1)/2*d; t0+=d; };
+  push(rampD,0,V); if(holdD>0) push(holdD,V,V); push(rampD,V,0);        // ramp up → (hold) → ramp down, back to rest
+}
+function supEnsureAhead(){ let g=0; while(supLastEnd().t < SUP.nowT+SHOW_FUT+1 && g++<60){ SUP.nextMove?supAppendMove():supAppendRest(); SUP.nextMove=!SUP.nextMove; }
+  while(SUP.segs.length>3 && (SUP.segs[0].t0+SUP.segs[0].d) < SUP.nowT-SHOW_PAST-2) SUP.segs.shift();
+  while(SUP.samples.length>3 && SUP.samples[0].t < SUP.nowT-SHOW_PAST-1) SUP.samples.shift(); }
+function supErrorNow(){ const tgt=streamAt(SUP.nowT);
+  if(SUP.type==='pt') return Math.abs(curX-tgt.x);
+  const sv=SUP.samples.length?SUP.samples[SUP.samples.length-1].v:0; return Math.abs(sv-tgt.v); }
+function supReset(type){ SUP.on=true; SUP.type=type; SUP.segs=[]; SUP.samples=[]; SUP.nowT=0; SUP.elapsed=0; SUP.health=100; SUP.nextMove=true; curX=0;
+  SUP.segs.push({t0:0,d:2.2,v0:0,v1:0,x0:0,kind:'rest'}); SUP.graceUntil=2.2; supEnsureAhead(); }
+function supFrame(now){ if(!SUP.on) return; const dt=Math.min(0.05,(now-SUP.lastReal)/1000); SUP.lastReal=now;
+  const diff=Math.min(1,SUP.elapsed/60), scrollRate=1+diff*0.5;
+  SUP.nowT+=dt*scrollRate; SUP.elapsed+=dt;
+  if(pointerDown) curX=pointerWorldX;
+  const tb=SUP.nowT-0.2; let xb=curX; for(let i=SUP.samples.length-1;i>=0;i--){ if(SUP.samples[i].t<=tb){xb=SUP.samples[i].x;break;} }
+  SUP.samples.push({t:SUP.nowT,x:curX,v:(curX-xb)/0.2});
+  supEnsureAhead();
+  const good=supErrorNow()<=(SUP.type==='pt'?1.3:1.0);
+  if(SUP.nowT>SUP.graceUntil) SUP.health=clamp(SUP.health+(good?22:-45)*dt,0,100);
+  supDraw();
+  if(SUP.health<=0){ supEnd(); return; }
+  SUP.raf=requestAnimationFrame(supFrame);
+}
+function supDraw(){
+  drawScene();
+  const {w,h}=fit(graphCv,gx2); gx2.clearRect(0,0,w,h);
+  const L=44,R=w-12,T=16,B=h-22, isPT=SUP.type==='pt', vmax=isPT?10:4, vmin=-vmax;
+  const t0=SUP.nowT-SHOW_PAST, t1=SUP.nowT+SHOW_FUT, GX=t=>L+((t-t0)/(t1-t0))*(R-L), GY=v=>B-((v-vmin)/(vmax-vmin))*(B-T);
+  gx2.fillStyle='#0c1430'; rr(gx2,L-2,T-2,R-L+4,B-T+4,8); gx2.fill();
+  gx2.textAlign='right'; gx2.textBaseline='middle'; gx2.font='10px system-ui';
+  (isPT?[-10,-5,0,5,10]:[-4,-2,0,2,4]).forEach(v=>{ const y=GY(v); gx2.strokeStyle=v===0?'#3a4e82':'#22335f'; gx2.lineWidth=v===0?1.5:1;
+    gx2.beginPath(); gx2.moveTo(L,y); gx2.lineTo(R,y); gx2.stroke(); gx2.fillStyle='#7f90bd'; gx2.fillText(''+v,L-5,y); });
+  gx2.strokeStyle=getCss('--tgt'); gx2.lineWidth=2.5; gx2.beginPath(); let st=false;
+  for(let i=0;i<=90;i++){ const t=t0+(t1-t0)*i/90; if(t<0)continue; const s=streamAt(t), val=isPT?s.x:s.v, X=GX(t),Y=GY(clamp(val,vmin,vmax)); st?gx2.lineTo(X,Y):(gx2.moveTo(X,Y),st=true); }
+  gx2.stroke();
+  gx2.strokeStyle=getCss('--you'); gx2.lineWidth=2.5; gx2.beginPath(); st=false;
+  for(const p of SUP.samples){ if(p.t<t0||p.t>SUP.nowT)continue; const val=isPT?p.x:p.v, X=GX(p.t),Y=GY(clamp(val,vmin,vmax)); st?gx2.lineTo(X,Y):(gx2.moveTo(X,Y),st=true); }
+  gx2.stroke();
+  const nx=GX(SUP.nowT); gx2.strokeStyle='rgba(255,255,255,.78)'; gx2.lineWidth=2; gx2.beginPath(); gx2.moveTo(nx,T-3); gx2.lineTo(nx,B); gx2.stroke();
+  gx2.fillStyle='rgba(255,255,255,.85)'; gx2.font='9px system-ui'; gx2.textAlign='center'; gx2.textBaseline='bottom'; gx2.fillText('NOW',nx,T-3);
+  const hb=SUP.health/100; gx2.fillStyle='#22335f'; gx2.fillRect(L,T-12,R-L,5); gx2.fillStyle=hb>0.4?'#5be0a0':(hb>0.2?'#ffd166':'#ff7a7a'); gx2.fillRect(L,T-12,(R-L)*hb,5);
+  const runSec=Math.max(0,(performance.now()-SUP.startReal)/1000);
+  gx2.fillStyle='#eaf0ff'; gx2.font='12px system-ui'; gx2.textAlign='left'; gx2.textBaseline='top';
+  gx2.fillText('⏱ '+runSec.toFixed(1)+'s   ·   best '+Math.round(bestRun)+'s', L, B+4);
+}
+function setSuperUI(on){ $('#stopBtn').style.display=on?'':'none';
+  if(on){ $('#startBtn').style.display='none'; $('#showBtn').style.display='none'; $('#newBtn').style.display='none'; hideResult(); setStatus('🔥 Super Challenge'); }
+  else { setControls('idle'); setStatus(''); } }
+function openSuper(){ if(SUP.on) return; $('#supBestEntry').textContent=Math.round(bestRun)+' s'; $('#superModal').classList.add('show'); }
+function startSuper(type){ $('#superModal').classList.remove('show'); $('#superOverModal').classList.remove('show');
+  if(raf) cancelAnimationFrame(raf); setSuperUI(true); supReset(type);
+  SUP.startReal=performance.now(); SUP.lastReal=performance.now(); SUP.raf=requestAnimationFrame(supFrame); }
+function supEnd(){ if(!SUP.on) return; SUP.on=false; if(SUP.raf) cancelAnimationFrame(SUP.raf);
+  const runSec=Math.max(0,(performance.now()-SUP.startReal)/1000); saveBest(runSec);
+  $('#supRun').textContent=runSec.toFixed(1)+' s'; $('#supBest').textContent=Math.round(bestRun)+' s';
+  $('#superOverModal').classList.add('show'); }
+function exitSuper(){ SUP.on=false; if(SUP.raf) cancelAnimationFrame(SUP.raf);
+  $('#superOverModal').classList.remove('show'); $('#superModal').classList.remove('show'); setSuperUI(false); loadTask(); }
+
 /* ---------- wiring ---------- */
 $('#startBtn').onclick=startAttempt;
 $('#showBtn').onclick=showMe;
@@ -569,10 +682,18 @@ $('#newBtn').onclick=newGraph;
 $('#helpBtn').onclick=()=>$('#introModal').classList.add('show');
 $('#introStart').onclick=()=>$('#introModal').classList.remove('show');
 $('#introModal').addEventListener('click',e=>{ if(e.target.id==='introModal') e.currentTarget.classList.remove('show'); });
-window.addEventListener('resize',()=>{ if(cur && cur.phaseRun!=='run') redraw(cur.phaseRun==='done'?cur.T:0); });
+$('#superBtn').onclick=openSuper;
+$('#supPos').onclick=()=>startSuper('pt');
+$('#supVel').onclick=()=>startSuper('vt');
+$('#supClose').onclick=()=>$('#superModal').classList.remove('show');
+$('#stopBtn').onclick=supEnd;
+$('#supAgain').onclick=()=>startSuper(SUP.type||'pt');
+$('#supSwitch').onclick=()=>{ $('#superOverModal').classList.remove('show'); openSuper(); };
+$('#supBack').onclick=exitSuper;
+window.addEventListener('resize',()=>{ if(!SUP.on && cur && cur.phaseRun!=='run') redraw(cur.phaseRun==='done'?cur.T:0); });
 
 /* expose for quick checks */
-window.__mm={genMotion,scoreAttempt,makeCode,initials,state,get cur(){return cur;}};
+window.__mm={genMotion,scoreAttempt,makeCode,initials,state,get cur(){return cur;},SUP,streamAt,get bestRun(){return bestRun;}};
 
 /* ---------- boot ---------- */
 loadTask();
