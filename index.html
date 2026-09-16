@@ -151,6 +151,7 @@
       <li>The <b>house is 0</b>. Right is <b>positive</b>, left is <b>negative</b>.</li>
       <li><b>Position–time:</b> the car's <i>location</i> should follow the line — including where it starts.</li>
       <li><b>Velocity–time:</b> the car should <i>move at each speed</i> for each part. Start anywhere — only the speeds matter.</li>
+      <li>Some graphs <b>speed up or slow down</b> (acceleration): the p–t line curves and the v–t line slopes — change your speed smoothly to follow it.</li>
       <li>Get about <b>60%</b> or better to pass. Use <b>Show me</b> in warm-ups to watch the correct motion.</li>
     </ul>
     <p><b>To win:</b> pass <b>two</b> position–time and <b>two</b> velocity–time warm-ups, then clear <b>7</b> three-part challenges.</p>
@@ -203,45 +204,58 @@ let stars=null, starsW=0;
 
 /* ---------- state ---------- */
 const WIN_TARGET=7;
-const state={ phase:'warm', warmSeq:['pt','pt','vt','vt'], warmI:0, end:{pass:0} };
+const state={ phase:'warm', warmI:0, end:{pass:0,shown:0},
+  warmSeq:[{t:'pt',a:false},{t:'pt',a:true},{t:'vt',a:false},{t:'vt',a:true}] };
 let cur=null;            // current target + run data
 let curX=0;              // car world position
 let pointerDown=false, pointerWorldX=0;
 let raf=null;
 
 /* ---------- motion generation ---------- */
-function genMotion(nSeg,type){
+/* A segment is {v0,v1,d}: constant velocity when v0===v1, otherwise a constant-acceleration ramp. */
+function segDisp(s){ return (s.v0+s.v1)/2*s.d; }                 // displacement over the segment
+function genMotion(nSeg,type,accel){
   const durs=[2,2.5,3];
-  const vsetPT=[-2,-1.5,-1,0,1,1.5,2];
-  const vsetVT=[-2,-1,0,1,2,3];
-  const vset=type==='vt'?vsetVT:vsetPT;
-  for(let tries=0;tries<300;tries++){
+  const vset=type==='vt'?[-2,-1,0,1,2,3]:[-2,-1.5,-1,0,1,1.5,2];
+  const aend=[-2,-1,0,1,2];                                       // ramp endpoints
+  for(let tries=0;tries<400;tries++){
+    const idx = accel ? Math.floor(Math.random()*nSeg) : -1;
     const segs=[]; let prev=null;
-    for(let i=0;i<nSeg;i++){
-      let v,g=0; do{ v=rnd(vset); g++; }while(v===prev && g<25);
-      segs.push({v, d:rnd(durs)}); prev=v;
+    for(let i=0;i<nSeg;i++){ const d=rnd(durs);
+      if(i===idx){ let v0,v1,g=0; do{ v0=rnd(aend); v1=rnd(aend); g++; }
+          while((Math.abs(v1-v0)<1 || (prev!==null&&v0===prev)) && g<40);
+        segs.push({v0,v1,d}); prev=v1; }
+      else { let v,g=0; do{ v=rnd(vset); g++; }while(prev!==null&&v===prev&&g<25); segs.push({v0:v,v1:v,d}); prev=v; }
     }
-    if(segs.every(s=>s.v===0)) continue;
-    // path relative to 0
+    if(segs.every(s=>s.v0===0&&s.v1===0)) continue;
+    if(accel && idx>=0 && segs[idx].v0===segs[idx].v1) continue;
+    // integrate for bounds (endpoints + interior, since a ramp through 0 can peak mid-segment)
     let x=0,minx=0,maxx=0; const rel=[0];
-    for(const s of segs){ x+=s.v*s.d; rel.push(x); minx=Math.min(minx,x); maxx=Math.max(maxx,x); }
+    for(const s of segs){ x+=segDisp(s); rel.push(x); minx=Math.min(minx,x); maxx=Math.max(maxx,x); }
     if(maxx-minx>18) continue;
     const x0=-(minx+maxx)/2;
-    if(rel.some(r=>Math.abs(x0+r)>XSAFE)) continue;
+    let ok=rel.every(r=>Math.abs(x0+r)<=XSAFE);
+    if(ok){ let xx=x0; for(const s of segs){ const a=(s.v1-s.v0)/s.d;
+      for(let k=1;k<8;k++){ const tau=s.d*k/8, xp=xx+s.v0*tau+0.5*a*tau*tau; if(Math.abs(xp)>XSAFE+0.4){ok=false;break;} }
+      if(!ok)break; xx+=segDisp(s); } }
+    if(!ok) continue;
     const T=segs.reduce((a,s)=>a+s.d,0);
     return {type, segs, x0:Math.round(x0*2)/2, T};
   }
   // fallback
-  const segs=[]; for(let i=0;i<nSeg;i++) segs.push({v:i%2?-1:1,d:2.5});
+  const segs=[]; for(let i=0;i<nSeg;i++){ const v=i%2?-1:1; segs.push({v0:v,v1:v,d:2.5}); }
+  if(accel) segs[0]={v0:0,v1:2,d:2.5};
   return {type,segs,x0:-1,T:nSeg*2.5};
 }
 function makeCur(m){ return {type:m.type,segs:m.segs,x0:m.x0,T:m.T,samples:[],done:false,phaseRun:'idle',lastResult:null}; }
 
 function targetXAt(t){ t=clamp(t,0,cur.T); let x=cur.x0,acc=0;
-  for(const s of cur.segs){ if(t<=acc+s.d+1e-9) return x+s.v*(t-acc); x+=s.v*s.d; acc+=s.d; } return x; }
+  for(const s of cur.segs){ if(t<=acc+s.d+1e-9){ const tau=t-acc, a=(s.v1-s.v0)/s.d; return x+s.v0*tau+0.5*a*tau*tau; }
+    x+=segDisp(s); acc+=s.d; } return x; }
 function targetVAt(t){ t=clamp(t,0,cur.T); let acc=0;
-  for(const s of cur.segs){ if(t<acc+s.d-1e-9) return s.v; acc+=s.d; } return cur.segs[cur.segs.length-1].v; }
-function vRange(){ let m=3.5; for(const s of cur.segs) m=Math.max(m,Math.abs(s.v)+1); return m; }
+  for(const s of cur.segs){ if(t<acc+s.d-1e-9){ const tau=t-acc; return s.v0+(s.v1-s.v0)*(tau/s.d); } acc+=s.d; }
+  const l=cur.segs[cur.segs.length-1]; return l.v1; }
+function vRange(){ let m=3.5; for(const s of cur.segs) m=Math.max(m,Math.abs(s.v0)+1,Math.abs(s.v1)+1); return m; }
 
 /* ---------- scoring ---------- */
 function studentXAt(t){ const s=cur.samples; if(!s.length) return null;
@@ -266,10 +280,13 @@ function scoreAttempt(){
       const R = ssTot<1e-9 ? (ssRes<1e-9?1:0) : 1-ssRes/ssTot; if(R>best) best=R; }
     const score=Math.round(clamp(best,0,1)*100); return {score,pass:best>=PASS_R,R:best};
   } else {
-    // average speed per segment, ignoring a short window at each edge so changing speed is allowed
+    // average speed over sub-windows of each segment; a ramp is split into 3 so it can't be faked by holding the mean
     const sv=[],tv=[]; let acc=0;
-    for(const s of cur.segs){ const trim=Math.min(0.3, s.d*0.3), t0=acc+trim, t1=acc+s.d-trim;
-      sv.push((studentXAt(t1)-studentXAt(t0))/(t1-t0)); tv.push(s.v); acc+=s.d; }
+    for(const s of cur.segs){ const trim=Math.min(0.25, s.d*0.25), t0=acc+trim, t1=acc+s.d-trim, span=t1-t0;
+      const K=(s.v0!==s.v1)?3:1;
+      for(let j=0;j<K;j++){ const a=t0+span*j/K, b=t0+span*(j+1)/K;
+        sv.push((studentXAt(b)-studentXAt(a))/(b-a)); tv.push((targetXAt(b)-targetXAt(a))/(b-a)); }
+      acc+=s.d; }
     const R=r2(sv,tv), score=Math.round(clamp(R,0,1)*100); return {score,pass:R>=PASS_R,R};
   }
 }
@@ -377,10 +394,10 @@ function drawGraph(tNow){
   gx2.fillText(isPT?'position (m)':'velocity (m/s)',0,0); gx2.restore();
   // target
   gx2.strokeStyle=getCss('--tgt'); gx2.lineWidth=2.5; gx2.setLineDash([6,4]); gx2.beginPath();
-  if(isPT){ gx2.moveTo(GX(0),GY(cur.x0)); let x=cur.x0,acc=0;
-    for(const s of cur.segs){ x+=s.v*s.d; acc+=s.d; gx2.lineTo(GX(acc),GY(x)); } }
-  else { let acc=0,first=true; for(const s of cur.segs){ const y=GY(s.v);
-    if(first){gx2.moveTo(GX(acc),y);first=false;} else {gx2.lineTo(GX(acc),y);} gx2.lineTo(GX(acc+s.d),y); acc+=s.d; } }
+  if(isPT){ const M=52; gx2.moveTo(GX(0),GY(clamp(targetXAt(0),vmin,vmax)));
+    for(let i=1;i<=M;i++){ const t=cur.T*i/M; gx2.lineTo(GX(t),GY(clamp(targetXAt(t),vmin,vmax))); } }
+  else { let acc=0,first=true; for(const s of cur.segs){ const y0=GY(clamp(s.v0,vmin,vmax)), y1=GY(clamp(s.v1,vmin,vmax));
+    if(first){gx2.moveTo(GX(acc),y0);first=false;} else {gx2.lineTo(GX(acc),y0);} gx2.lineTo(GX(acc+s.d),y1); acc+=s.d; } }
   gx2.stroke(); gx2.setLineDash([]);
   // target start dot (pt)
   if(isPT){ gx2.fillStyle=getCss('--tgt'); gx2.beginPath(); gx2.arc(GX(0),GY(cur.x0),4,0,7); gx2.fill(); }
@@ -468,27 +485,31 @@ function advance(){
   if(state.phase==='warm'){ state.warmI++; if(state.warmI>=state.warmSeq.length) startFinal(); else loadTask(); }
   else if(state.phase==='end'){ if(state.end.pass>=WIN_TARGET){ showWin(); return; } loadTask(); }
 }
-function startFinal(){ state.phase='end'; state.end={pass:0}; loadTask(); }
+function startFinal(){ state.phase='end'; state.end={pass:0,shown:0}; loadTask(); }
 
 /* ---------- task loading ---------- */
+function accelNote(type){ return type==='pt'
+  ? ' This one speeds up or slows down — follow the curve.'
+  : ' This one has a ramp — change speed smoothly to follow the slope.'; }
 function loadTask(){
   hideResult(); setControls('idle'); setStatus(''); curX=0;
-  if(state.phase==='warm'){ const type=state.warmSeq[state.warmI]; cur=makeCur(genMotion(2,type));
-    setTask('Warm-up '+(state.warmI+1)+' of 4 · '+(type==='pt'?'Position–Time':'Velocity–Time'),
-      type==='pt'?'Move the car so its position follows the line. Watch where it starts!':'Move the car at each speed shown. Start anywhere — only the speeds matter.',
-      type==='pt'?'Position–time':'Velocity–time'); }
-  else if(state.phase==='end'){ const type=Math.random()<0.5?'pt':'vt'; cur=makeCur(genMotion(3,type));
-    setTask('Challenge · '+state.end.pass+' of '+WIN_TARGET+' cleared',
-      type==='pt'?'Match the position line (including the start).':'Match each speed. Start anywhere.',
-      type==='pt'?'Position–time':'Velocity–time'); }
+  if(state.phase==='warm'){ const gate=state.warmSeq[state.warmI], type=gate.t; cur=makeCur(genMotion(2,type,gate.a));
+    const base=type==='pt'?'Move the car so its position follows the line. Watch where it starts!':'Move the car at each speed shown. Start anywhere — only the speeds matter.';
+    setTask('Warm-up '+(state.warmI+1)+' of 4 · '+(type==='pt'?'Position–Time':'Velocity–Time')+(gate.a?' (accelerating)':''),
+      base+(gate.a?accelNote(type):''), type==='pt'?'Position–time':'Velocity–time'); }
+  else if(state.phase==='end'){ state.end.shown++; const accel=state.end.shown%3===0;
+    const type=Math.random()<0.5?'pt':'vt'; cur=makeCur(genMotion(3,type,accel));
+    const base=type==='pt'?'Match the position line (including the start).':'Match each speed. Start anywhere.';
+    setTask('Challenge · '+state.end.pass+' of '+WIN_TARGET+' cleared'+(accel?' · accelerating':''),
+      base+(accel?accelNote(type):''), type==='pt'?'Position–time':'Velocity–time'); }
   redraw(0); renderProgress();
 }
 function setTask(title,sub,type){ $('#taskTitle').textContent=title; $('#taskSub').textContent=sub; $('#graphType').textContent=type; }
 
 function renderProgress(){
-  const done=state.phase==='warm'?state.warmSeq.slice(0,state.warmI):['pt','pt','vt','vt'];
-  const ptPass=done.filter(t=>t==='pt').length, vtPass=done.filter(t=>t==='vt').length;
-  const nowType=state.phase==='warm'?state.warmSeq[state.warmI]:null;
+  const doneGates=state.phase==='warm'?state.warmSeq.slice(0,state.warmI):state.warmSeq;
+  const ptPass=doneGates.filter(g=>g.t==='pt').length, vtPass=doneGates.filter(g=>g.t==='vt').length;
+  const nowType=state.phase==='warm'?state.warmSeq[state.warmI].t:null;
   const p=$('#progress'); const items=[
     {label:'Position warm-ups '+Math.min(ptPass,2)+' / 2', st: ptPass>=2?'done':(nowType==='pt'?'on':'')},
     {label:'Velocity warm-ups '+Math.min(vtPass,2)+' / 2', st: vtPass>=2?'done':(nowType==='vt'?'on':'')},
@@ -521,7 +542,7 @@ $('#nameField').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#codeBtn'
 $('#copyBtn').onclick=()=>{ const code=$('#codeOut').textContent;
   const done=()=>{ $('#copyBtn').textContent='Copied ✓'; setTimeout(()=>$('#copyBtn').textContent='Copy code',1400); };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done,done); else done(); };
-$('#againBtn').onclick=()=>{ $('#winModal').classList.remove('show'); state.phase='warm'; state.warmI=0; state.end={pass:0}; loadTask(); };
+$('#againBtn').onclick=()=>{ $('#winModal').classList.remove('show'); state.phase='warm'; state.warmI=0; state.end={pass:0,shown:0}; loadTask(); };
 
 /* ---------- wiring ---------- */
 $('#startBtn').onclick=startAttempt;
