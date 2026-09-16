@@ -35,8 +35,10 @@
   .pstep.on .b{background:var(--accent);color:#1a1200;border-color:var(--accent)}
   .pstep.done .b{background:var(--good);color:#04240f;border-color:var(--good)}
 
-  .main{display:grid;grid-template-columns:1fr;gap:14px;margin-top:10px}
-  @media(min-width:900px){.main{grid-template-columns:1fr 1fr}}
+  .playrow{display:flex;gap:14px;align-items:stretch;margin-top:10px}
+  .graphcard{flex:1 1 auto;min-width:0}
+  .scenecard{margin-top:14px}
+  @media(max-width:600px){ .playrow{flex-direction:column} }
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
   .card h2{font-size:1rem;font-weight:700}
   .card .sub{color:var(--muted);font-size:.85rem;margin-top:3px;min-height:1.1em}
@@ -54,7 +56,9 @@
   .readout{display:flex;gap:10px;margin-top:8px;font-size:.85rem;color:var(--muted);flex-wrap:wrap}
   .readout b{color:var(--text);font-variant-numeric:tabular-nums}
 
-  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  .controls{flex:0 0 210px;display:flex;flex-direction:column;gap:10px;align-items:stretch}
+  .controls .btn{width:100%}
+  @media(max-width:600px){ .controls{flex-basis:auto} }
   .btn{font-size:1rem;font-weight:700;border:none;border-radius:12px;padding:13px 20px;cursor:pointer;
     background:var(--accent);color:#1a1200}
   .btn.sec{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
@@ -104,8 +108,8 @@
 
   <div class="progress" id="progress"></div>
 
-  <div class="main">
-    <div class="card">
+  <div class="playrow">
+    <div class="card graphcard">
       <h2 id="taskTitle">Warm-up 1 of 2</h2>
       <div class="sub" id="taskSub">Match the graph by moving the car.</div>
       <canvas id="graph"></canvas>
@@ -116,27 +120,26 @@
       </div>
     </div>
 
-    <div class="card">
-      <h2>Drag area — <span style="color:var(--muted);font-weight:600">house = 0, right +, left −</span></h2>
-      <div class="sub">Press and drag the car left/right. Only sideways motion counts.</div>
-      <canvas id="scene"></canvas>
-      <div class="readout">
-        <span>Car position: <b id="posRead">0.0 m</b></span>
-        <span>Time: <b id="timeRead">0.0 s</b></span>
+    <div class="controls" id="controls">
+      <button class="btn" id="startBtn">▶ Start</button>
+      <button class="btn sec" id="showBtn">👀 Show me</button>
+      <div class="status" id="status"></div>
+      <div class="result" id="result">
+        <div class="rtitle" id="rTitle"></div>
+        <div class="rscore" id="rScore"></div>
+        <div class="rbtns" id="rBtns"></div>
       </div>
     </div>
   </div>
 
-  <div class="controls" id="controls">
-    <button class="btn" id="startBtn">▶ Start</button>
-    <button class="btn sec" id="showBtn">👀 Show me</button>
-    <div class="status" id="status"></div>
-  </div>
-
-  <div class="result" id="result">
-    <div class="rtitle" id="rTitle"></div>
-    <div class="rscore" id="rScore"></div>
-    <div class="rbtns" id="rBtns"></div>
+  <div class="card scenecard">
+    <h2>Drag area — <span style="color:var(--muted);font-weight:600">house = 0, right +, left −</span></h2>
+    <div class="sub">Press and drag the car left/right. Only sideways motion counts.</div>
+    <canvas id="scene"></canvas>
+    <div class="readout">
+      <span>Car position: <b id="posRead">0.0 m</b></span>
+      <span>Time: <b id="timeRead">0.0 s</b></span>
+    </div>
   </div>
 </div>
 
@@ -441,7 +444,7 @@ function hideResult(){ $('#result').classList.remove('show','pass','fail'); }
 
 function startAttempt(){
   hideResult(); cur.samples=[]; cur.done=false; cur.phaseRun='countdown'; setControls('run');
-  let c=3; setStatus('Get ready… '+c+'   (place the car if it\'s a position graph)',true); redraw(0);
+  let c=3; setStatus('Get ready… '+c,true); redraw(0);
   const iv=setInterval(()=>{ c--; if(c>=1){ setStatus('Get ready… '+c,true); }
     else { clearInterval(iv); beginRun(); } },750);
 }
