@@ -151,7 +151,7 @@
       <li>The <b>house is 0</b>. Right is <b>positive</b>, left is <b>negative</b>.</li>
       <li><b>Position–time:</b> the car's <i>location</i> should follow the line — including where it starts.</li>
       <li><b>Velocity–time:</b> the car should <i>move at each speed</i> for each part. Start anywhere — only the speeds matter.</li>
-      <li>Get about <b>70%</b> or better to pass. Use <b>Show me</b> in warm-ups to watch the correct motion.</li>
+      <li>Get about <b>60%</b> or better to pass. Use <b>Show me</b> in warm-ups to watch the correct motion.</li>
     </ul>
     <p><b>To win:</b> pass one position–time and one velocity–time warm-up, then match <b>3 of 4</b> graphs in the final round.</p>
     <button class="btn" id="introStart">Let's go 🚀</button>
@@ -245,14 +245,19 @@ function studentXAt(t){ const s=cur.samples; if(!s.length) return null;
   if(t<=s[0].t) return s[0].x; if(t>=s[s.length-1].t) return s[s.length-1].x;
   for(let i=1;i<s.length;i++){ if(s[i].t>=t){ const a=s[i-1],b=s[i],f=(t-a.t)/((b.t-a.t)||1); return a.x+(b.x-a.x)*f; } }
   return s[s.length-1].x; }
+function r2(s,t){ const n=t.length; let mean=0; for(const v of t) mean+=v; mean/=n;
+  let ssRes=0,ssTot=0; for(let i=0;i<n;i++){ ssRes+=(s[i]-t[i])**2; ssTot+=(t[i]-mean)**2; }
+  if(ssTot<1e-9) return ssRes<1e-9?1:0; return 1-ssRes/ssTot; }
+const PASS_R=0.6;
 function scoreAttempt(){
   if(!cur.samples.length) return {score:0,pass:false};
   if(cur.type==='pt'){
-    const N=60; let sum=0; for(let i=0;i<=N;i++){ const t=cur.T*i/N; sum+=Math.abs(studentXAt(t)-targetXAt(t)); }
-    const E=sum/(N+1), score=Math.round(clamp(100*(1-E/4),0,100)); return {score,pass:score>=70,E};
+    const N=60,sv=[],tv=[]; for(let i=0;i<=N;i++){ const t=cur.T*i/N; sv.push(studentXAt(t)); tv.push(targetXAt(t)); }
+    const R=r2(sv,tv), score=Math.round(clamp(R,0,1)*100); return {score,pass:R>=PASS_R,R};
   } else {
-    let acc=0,sum=0; for(const s of cur.segs){ const t0=acc,t1=acc+s.d; const av=(studentXAt(t1)-studentXAt(t0))/s.d; sum+=Math.abs(av-s.v); acc=t1; }
-    const Ev=sum/cur.segs.length, score=Math.round(clamp(100*(1-Ev/2.5),0,100)); return {score,pass:score>=70,Ev};
+    const sv=[],tv=[]; let acc=0;
+    for(const s of cur.segs){ const t0=acc,t1=acc+s.d; sv.push((studentXAt(t1)-studentXAt(t0))/s.d); tv.push(s.v); acc=t1; }
+    const R=r2(sv,tv), score=Math.round(clamp(R,0,1)*100); return {score,pass:R>=PASS_R,R};
   }
 }
 
@@ -430,7 +435,7 @@ function finishAttempt(){
 function showResult(r){
   const box=$('#result'); box.classList.add('show'); box.classList.toggle('pass',r.pass); box.classList.toggle('fail',!r.pass);
   $('#rTitle').textContent = r.pass ? '✅ Nice match!' : '❌ Not quite — try again';
-  $('#rScore').textContent = 'Match score: '+r.score+'%'+(r.pass?'':'  (need 70%)');
+  $('#rScore').textContent = 'Match score: '+r.score+'%'+(r.pass?'':'  (need 60%)');
   const btns=$('#rBtns'); btns.innerHTML='';
   const mk=(label,cls,fn)=>{ const b=document.createElement('button'); b.className='btn'+(cls?' '+cls:''); b.textContent=label; b.onclick=fn; btns.appendChild(b); };
   if(state.phase==='warm_pt'||state.phase==='warm_vt'){
