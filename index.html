@@ -177,11 +177,13 @@
     <h2 style="text-align:center">Congratulations, <span id="winName">friend</span>!</h2>
     <p style="text-align:center">You completed <b>Match the Motion</b>. Here is your completion code:</p>
     <div class="code" id="codeOut">--------</div>
-    <div class="turnin">📸 <b>Turn this in:</b> screenshot this page (or copy the code) and submit it to your teacher.
-      Your initials are hidden in the <b>3rd</b> and <b>6th</b> spots of the code.</div>
+    <button class="btn" id="turninBtn" style="width:100%;margin-top:12px">📨 Turn it in</button>
+    <div class="turnin" style="margin-top:12px">Tapping <b>Turn it in</b> opens your class form with your name and code
+      already filled — just press <b>Submit</b>. (No form opens? Screenshot this page instead.) Your initials are in the
+      <b>3rd</b> and <b>6th</b> spots of the code.</div>
     <div class="row2">
       <button class="btn sec" id="copyBtn">Copy code</button>
-      <button class="btn" id="againBtn">Play again</button>
+      <button class="btn sec" id="againBtn">Play again</button>
     </div>
   </div>
 </div>
@@ -510,11 +512,18 @@ function makeCode(name){ const [i1,i2]=initials(name);
   const cs='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; const r=()=>cs[Math.floor(Math.random()*cs.length)];
   return [r(),r(),i1,r(),r(),i2,r(),r()].join(''); }
 
+// Google Form "turn it in" (teacher's own form; student reviews and taps Submit)
+const FORM_URL='https://docs.google.com/forms/d/e/1FAIpQLSfbAxQHVeUl46FTfx8xybGsovtSHCfWSEWa-MHU5WRH4F41qQ/viewform?usp=pp_url';
+const FORM_NAME_ENTRY='entry.2072631698', FORM_CODE_ENTRY='entry.1611661514';
+function turnInURL(name,code){ return FORM_URL+'&'+FORM_NAME_ENTRY+'='+encodeURIComponent(name)+'&'+FORM_CODE_ENTRY+'='+encodeURIComponent(code); }
+let lastName='', lastCode='';
+
 function showWin(){ $('#nameField').value=''; $('#nameErr').textContent=''; $('#nameModal').classList.add('show'); setTimeout(()=>$('#nameField').focus(),50); }
 $('#codeBtn').onclick=()=>{ const name=$('#nameField').value.trim();
   if(name.replace(/[^A-Za-z]/g,'').length<2){ $('#nameErr').textContent='Please enter your first and last name.'; return; }
-  const code=makeCode(name); $('#winName').textContent=name.split(/\s+/)[0];
+  const code=makeCode(name); lastName=name; lastCode=code; $('#winName').textContent=name.split(/\s+/)[0];
   $('#codeOut').textContent=code; $('#nameModal').classList.remove('show'); $('#winModal').classList.add('show'); };
+$('#turninBtn').onclick=()=>{ if(!lastCode)return; window.open(turnInURL(lastName,lastCode),'_blank','noopener'); };
 $('#nameField').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#codeBtn').click(); });
 $('#copyBtn').onclick=()=>{ const code=$('#codeOut').textContent;
   const done=()=>{ $('#copyBtn').textContent='Copied ✓'; setTimeout(()=>$('#copyBtn').textContent='Copy code',1400); };
