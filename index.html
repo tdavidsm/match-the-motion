@@ -50,7 +50,7 @@
 
   canvas{display:block;width:100%;border-radius:11px;background:#0c1430;touch-action:none}
   #graph{height:290px}
-  #scene{height:330px;cursor:grab}
+  #scene{height:165px;cursor:grab}
   #scene:active{cursor:grabbing}
 
   .readout{display:flex;gap:10px;margin-top:8px;font-size:.85rem;color:var(--muted);flex-wrap:wrap}
@@ -208,7 +208,6 @@ let stars=null, starsW=0;
 
 /* ---------- state ---------- */
 const WIN_TARGET=7;
-const TIME_SCALE=1.5;   // real seconds per graph second — >1 plays the motion in slow motion
 const state={ phase:'warm', warmI:0, end:{pass:0,shown:0},
   warmSeq:[{t:'pt',a:false},{t:'pt',a:true},{t:'vt',a:false},{t:'vt',a:true}] };
 let cur=null;            // current target + run data
@@ -220,12 +219,12 @@ let raf=null;
 /* A segment is {v0,v1,d}: constant velocity when v0===v1, otherwise a constant-acceleration ramp. */
 function segDisp(s){ return (s.v0+s.v1)/2*s.d; }                 // displacement over the segment
 function genMotion(nSeg,type,accel){
-  const durs=[2,2.5,3];
+  const durs=[3,3.5,4];             // longer segments → the motion plays out over more real seconds
   const vset=type==='vt'?[-2,-1,0,1,2,3]:[-2,-1.5,-1,0,1,1.5,2];
   const aend=[-3,-2,-1,0,1,2,3];                                  // ramp endpoints
   const MIND=1.5;      // adjacent constant speeds must differ by at least this
   const DVMIN = type==='pt'?3:2;    // position-time ramps change speed more, so the curve is more pronounced
-  const AMIN  = type==='pt'?1.5:1.0;// ...and accelerate at least this hard (m/s^2)
+  const AMIN  = type==='pt'?0.7:0.8;// ...minimum acceleration (m/s^2); longer segments already enlarge the curve
   for(let tries=0;tries<500;tries++){
     const idx = accel ? Math.floor(Math.random()*nSeg) : -1;
     const segs=[]; let prev=null;
@@ -313,7 +312,7 @@ function rr(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,
 
 function drawScene(){
   const {w,h}=fit(sceneCv,sx);
-  const cx=w/2, pad=26, scale=(w/2-pad)/10, groundY=h-58;
+  const cx=w/2, pad=26, scale=(w/2-pad)/10, groundY=h-44;
   SCN={w,h,cx,scale,groundY};
   // sky
   const sky=sx.createLinearGradient(0,0,0,groundY); sky.addColorStop(0,'#0c1533'); sky.addColorStop(1,'#22336a');
@@ -465,14 +464,14 @@ function startAttempt(){
     else { clearInterval(iv); beginRun(); } },750);
 }
 function beginRun(){ cur.phaseRun='run'; cur.t0=performance.now(); setStatus('Match it! 🏁',true); raf=requestAnimationFrame(frame); }
-function frame(now){ const t=(now-cur.t0)/1000/TIME_SCALE;   // graph-time (playback runs slower than real time)
+function frame(now){ const t=(now-cur.t0)/1000;
   if(pointerDown) curX=pointerWorldX;
   if(t<=cur.T){ cur.samples.push({t,x:curX}); redraw(t); raf=requestAnimationFrame(frame); }
   else { cur.samples.push({t:cur.T,x:curX}); redraw(cur.T); finishAttempt(); } }
 
 function showMe(){ if(cur.phaseRun==='run')return; cur.phaseRun='demo'; setControls('run'); hideResult();
   setStatus('Watch the correct motion…'); const t0=performance.now();
-  (function d(now){ const t=(now-t0)/1000/TIME_SCALE; curX=targetXAt(Math.min(t,cur.T)); redraw(Math.min(t,cur.T));
+  (function d(now){ const t=(now-t0)/1000; curX=targetXAt(Math.min(t,cur.T)); redraw(Math.min(t,cur.T));
     if(t<cur.T) requestAnimationFrame(d); else { cur.phaseRun='idle'; setStatus('Your turn — press Start.'); setControls('idle'); } })(t0); }
 
 function finishAttempt(){
