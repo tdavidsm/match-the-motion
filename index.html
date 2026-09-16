@@ -208,6 +208,7 @@ let stars=null, starsW=0;
 
 /* ---------- state ---------- */
 const WIN_TARGET=7;
+const TIME_SCALE=1.5;   // real seconds per graph second — >1 plays the motion in slow motion
 const state={ phase:'warm', warmI:0, end:{pass:0,shown:0},
   warmSeq:[{t:'pt',a:false},{t:'pt',a:true},{t:'vt',a:false},{t:'vt',a:true}] };
 let cur=null;            // current target + run data
@@ -223,8 +224,8 @@ function genMotion(nSeg,type,accel){
   const vset=type==='vt'?[-2,-1,0,1,2,3]:[-2,-1.5,-1,0,1,1.5,2];
   const aend=[-3,-2,-1,0,1,2,3];                                  // ramp endpoints
   const MIND=1.5;      // adjacent constant speeds must differ by at least this
-  const DVMIN=2;       // a ramp must change velocity by at least this
-  const AMIN=1.0;      // ...and accelerate at least this hard (m/s^2)
+  const DVMIN = type==='pt'?3:2;    // position-time ramps change speed more, so the curve is more pronounced
+  const AMIN  = type==='pt'?1.5:1.0;// ...and accelerate at least this hard (m/s^2)
   for(let tries=0;tries<500;tries++){
     const idx = accel ? Math.floor(Math.random()*nSeg) : -1;
     const segs=[]; let prev=null;
@@ -464,14 +465,14 @@ function startAttempt(){
     else { clearInterval(iv); beginRun(); } },750);
 }
 function beginRun(){ cur.phaseRun='run'; cur.t0=performance.now(); setStatus('Match it! 🏁',true); raf=requestAnimationFrame(frame); }
-function frame(now){ const t=(now-cur.t0)/1000;
+function frame(now){ const t=(now-cur.t0)/1000/TIME_SCALE;   // graph-time (playback runs slower than real time)
   if(pointerDown) curX=pointerWorldX;
   if(t<=cur.T){ cur.samples.push({t,x:curX}); redraw(t); raf=requestAnimationFrame(frame); }
   else { cur.samples.push({t:cur.T,x:curX}); redraw(cur.T); finishAttempt(); } }
 
 function showMe(){ if(cur.phaseRun==='run')return; cur.phaseRun='demo'; setControls('run'); hideResult();
   setStatus('Watch the correct motion…'); const t0=performance.now();
-  (function d(now){ const t=(now-t0)/1000; curX=targetXAt(Math.min(t,cur.T)); redraw(Math.min(t,cur.T));
+  (function d(now){ const t=(now-t0)/1000/TIME_SCALE; curX=targetXAt(Math.min(t,cur.T)); redraw(Math.min(t,cur.T));
     if(t<cur.T) requestAnimationFrame(d); else { cur.phaseRun='idle'; setStatus('Your turn — press Start.'); setControls('idle'); } })(t0); }
 
 function finishAttempt(){
