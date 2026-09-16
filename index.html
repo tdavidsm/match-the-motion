@@ -608,12 +608,12 @@ function streamAt(t){ const S=SUP.segs; if(!S.length) return {x:0,v:0};
   if(t<=S[0].t0) return {x:S[0].x0, v:S[0].v0};
   for(const s of S){ if(t< s.t0+s.d+1e-9){ const tau=Math.max(0,t-s.t0), a=(s.v1-s.v0)/s.d; return {x:s.x0+s.v0*tau+0.5*a*tau*tau, v:s.v0+(s.v1-s.v0)*(tau/s.d)}; } }
   const l=S[S.length-1]; return {x:l.x0+(l.v0+l.v1)/2*l.d, v:l.v1}; }
-function supAppendRest(){ const e=supLastEnd(), diff=Math.min(1,SUP.elapsed/60), d=lerp(1.6,0.7,diff)+Math.random()*0.4;
+function supAppendRest(){ const e=supLastEnd(), diff=Math.min(1,SUP.elapsed/60), d=lerp(1.2,0.6,diff)+Math.random()*0.3;
   SUP.segs.push({t0:e.t,d,v0:0,v1:0,x0:e.x,kind:'rest'}); }             // a "sit still" transition
 function supAppendMove(){ const e=supLastEnd(), diff=Math.min(1,SUP.elapsed/60);
   const rampD=lerp(1.1,0.7,diff), holdD=(Math.random()<0.55?lerp(0.9,0.35,diff):0);
-  const Vmax=lerp(2,3,diff); let V=rnd([1,1.5,2,2.5,3].filter(v=>v<=Vmax+1e-6));
-  let dir = e.x>5?-1 : e.x<-5?1 : (Math.random()<0.5?1:-1); V*=dir;     // wander widely so sitting at 0 doesn't match
+  const Vmax=lerp(2.5,3,diff); let V=rnd([1.5,2,2.5,3].filter(v=>v<=Vmax+1e-6));
+  let dir = e.x>6?-1 : e.x<-6?1 : (Math.random()<0.5?1:-1); V*=dir;     // wander widely so sitting at 0 doesn't match
   if(Math.abs(e.x+V*(rampD+holdD))>8.3) V=-V;                          // ...but keep the car on screen
   let t0=e.t,x0=e.x; const push=(d,v0,v1)=>{ SUP.segs.push({t0,d,v0,v1,x0,kind:'move'}); x0+=(v0+v1)/2*d; t0+=d; };
   push(rampD,0,V); if(holdD>0) push(holdD,V,V); push(rampD,V,0);        // ramp up → (hold) → ramp down, back to rest
@@ -634,7 +634,7 @@ function supFrame(now){ if(!SUP.on) return; const dt=Math.min(0.05,(now-SUP.last
   SUP.samples.push({t:SUP.nowT,x:curX,v:(curX-xb)/0.2});
   supEnsureAhead();
   const good=supErrorNow()<=(SUP.type==='pt'?1.3:1.0);
-  if(SUP.nowT>SUP.graceUntil) SUP.health=clamp(SUP.health+(good?18:-55)*dt,0,100);
+  if(SUP.nowT>SUP.graceUntil) SUP.health=clamp(SUP.health+(good?14:-60)*dt,0,100);
   supDraw();
   if(SUP.health<=0){ supEnd(); return; }
   SUP.raf=requestAnimationFrame(supFrame);
