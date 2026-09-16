@@ -229,10 +229,14 @@ function genMotion(nSeg,type,accel){
     const idx = accel ? Math.floor(Math.random()*nSeg) : -1;
     const segs=[]; let prev=null;
     for(let i=0;i<nSeg;i++){
-      if(i===idx){ let v0,v1,dd,g=0; do{ dd=rnd(durs); v0=rnd(aend); v1=rnd(aend); g++; }
+      if(i===idx){ // accelerate — continue from the speed you were already going (no jump INTO a ramp)
+        const v0 = (prev!==null ? prev : rnd(aend)); let v1,dd,g=0;
+        do{ dd=rnd(durs); v1=rnd(aend); g++; }
           while((Math.abs(v1-v0)<DVMIN || Math.abs((v1-v0)/dd)<AMIN) && g<120);
         segs.push({v0,v1,d:dd}); prev=v1; }
-      else { const d=rnd(durs); let v,g=0; do{ v=rnd(vset); g++; }
+      else if(i-1===idx){ // right after a ramp: hold the speed it ended on (no jump OUT of a ramp)
+        segs.push({v0:prev,v1:prev,d:rnd(durs)}); }
+      else { const d=rnd(durs); let v,g=0; do{ v=rnd(vset); g++; }   // constant→constant: a jump of ≥1.5 is allowed
           while(prev!==null && Math.abs(v-prev)<MIND && g<60); segs.push({v0:v,v1:v,d}); prev=v; }
     }
     if(segs.every(s=>s.v0===0&&s.v1===0)) continue;
