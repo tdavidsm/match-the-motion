@@ -197,6 +197,7 @@ const XMIN=-10, XMAX=10, XSAFE=9;
 const sceneCv=$('#scene'), sx=sceneCv.getContext('2d');
 const graphCv=$('#graph'), gx2=graphCv.getContext('2d');
 let SCN={w:0,h:0,cx:0,scale:1,groundY:0};
+let stars=null, starsW=0;
 
 /* ---------- state ---------- */
 const state={ phase:'warm_pt', ptDone:false, vtDone:false,
@@ -249,14 +250,24 @@ function r2(s,t){ const n=t.length; let mean=0; for(const v of t) mean+=v; mean/
   let ssRes=0,ssTot=0; for(let i=0;i<n;i++){ ssRes+=(s[i]-t[i])**2; ssTot+=(t[i]-mean)**2; }
   if(ssTot<1e-9) return ssRes<1e-9?1:0; return 1-ssRes/ssTot; }
 const PASS_R=0.6;
+function smoothX(t){ const W=0.12; return (studentXAt(t-W)+studentXAt(t)+studentXAt(t+W))/3; }
 function scoreAttempt(){
   if(!cur.samples.length) return {score:0,pass:false};
   if(cur.type==='pt'){
-    const N=60,sv=[],tv=[]; for(let i=0;i<=N;i++){ const t=cur.T*i/N; sv.push(studentXAt(t)); tv.push(targetXAt(t)); }
-    const R=r2(sv,tv), score=Math.round(clamp(R,0,1)*100); return {score,pass:R>=PASS_R,R};
+    // compare smoothed position to target, allowing a small reaction-lag time shift
+    const N=60, ts=[], tv=[]; let mean=0;
+    for(let i=0;i<=N;i++){ const t=cur.T*i/N; ts.push(t); const tx=targetXAt(t); tv.push(tx); mean+=tx; }
+    mean/=(N+1); let ssTot=0; for(const v of tv) ssTot+=(v-mean)**2;
+    let best=-1e9;
+    for(let sh=-0.4; sh<=0.401; sh+=0.1){ let ssRes=0;
+      for(let i=0;i<=N;i++){ const d=smoothX(ts[i]+sh)-tv[i]; ssRes+=d*d; }
+      const R = ssTot<1e-9 ? (ssRes<1e-9?1:0) : 1-ssRes/ssTot; if(R>best) best=R; }
+    const score=Math.round(clamp(best,0,1)*100); return {score,pass:best>=PASS_R,R:best};
   } else {
+    // average speed per segment, ignoring a short window at each edge so changing speed is allowed
     const sv=[],tv=[]; let acc=0;
-    for(const s of cur.segs){ const t0=acc,t1=acc+s.d; sv.push((studentXAt(t1)-studentXAt(t0))/s.d); tv.push(s.v); acc=t1; }
+    for(const s of cur.segs){ const trim=Math.min(0.3, s.d*0.3), t0=acc+trim, t1=acc+s.d-trim;
+      sv.push((studentXAt(t1)-studentXAt(t0))/(t1-t0)); tv.push(s.v); acc+=s.d; }
     const R=r2(sv,tv), score=Math.round(clamp(R,0,1)*100); return {score,pass:R>=PASS_R,R};
   }
 }
@@ -275,17 +286,19 @@ function drawScene(){
   // sky
   const sky=sx.createLinearGradient(0,0,0,groundY); sky.addColorStop(0,'#0c1533'); sky.addColorStop(1,'#22336a');
   sx.fillStyle=sky; sx.fillRect(0,0,w,groundY);
-  // stars
-  sx.fillStyle='rgba(220,232,255,.5)';
-  for(let i=0;i<26;i++){ const sxp=((i*127)%w), syp=((i*71)%groundY)*0.7; sx.fillRect(sxp,syp,1.6,1.6); }
+  // stars (fixed positions, generated once per size so they don't jump)
+  if(!stars||starsW!==w){ stars=[]; starsW=w; const n=Math.round(w/26);
+    for(let i=0;i<n;i++) stars.push({x:Math.random()*w, y:Math.random()*groundY*0.8, r:Math.random()*1.1+0.6, a:Math.random()*0.5+0.35}); }
+  stars.forEach(s=>{ sx.globalAlpha=s.a; sx.fillStyle='#e8eeff'; sx.beginPath(); sx.arc(s.x,s.y,s.r,0,7); sx.fill(); });
+  sx.globalAlpha=1;
   // ground
   sx.fillStyle='#152144'; sx.fillRect(0,groundY,w,h-groundY);
   sx.strokeStyle='#2c3d6b'; sx.lineWidth=2;
   sx.beginPath(); sx.moveTo(0,groundY); sx.lineTo(w,groundY); sx.stroke();
   // ruler ticks
   sx.fillStyle='#7f90bd'; sx.font='11px system-ui'; sx.textAlign='center';
-  for(let m=XMIN;m<=XMAX;m+=2){ const px=cx+m*scale; sx.strokeStyle='#2c3d6b'; sx.lineWidth=1;
-    sx.beginPath(); sx.moveTo(px,groundY); sx.lineTo(px,groundY+6); sx.stroke();
+  for(let m=-10;m<=10;m+=5){ const px=cx+m*scale; sx.strokeStyle='#2c3d6b'; sx.lineWidth=1;
+    sx.beginPath(); sx.moveTo(px,groundY); sx.lineTo(px,groundY+8); sx.stroke();
     sx.fillStyle=m===0?'#ffd166':'#7f90bd'; sx.fillText(m===0?'0':(''+m),px,groundY+20); }
   // trees
   [-8,-5,5,8].forEach(m=>drawTree(cx+m*scale,groundY));
