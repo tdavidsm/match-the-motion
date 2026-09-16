@@ -123,6 +123,7 @@
     <div class="controls" id="controls">
       <button class="btn" id="startBtn">▶ Start</button>
       <button class="btn sec" id="showBtn">👀 Show me</button>
+      <button class="btn sec" id="newBtn">🔀 New graph</button>
       <div class="status" id="status"></div>
       <div class="result" id="result">
         <div class="rtitle" id="rTitle"></div>
@@ -435,10 +436,16 @@ sceneCv.addEventListener('pointercancel',()=>{ pointerDown=false; });
 /* ---------- run flow ---------- */
 function setStatus(t,big){ const s=$('#status'); s.textContent=t; s.classList.toggle('big',!!big); }
 function setControls(mode){
-  const start=$('#startBtn'), show=$('#showBtn');
-  const warm=(state.phase==='warm');
-  if(mode==='idle'){ start.style.display=''; start.disabled=false; show.style.display=warm?'':'none'; show.disabled=false; }
-  else { start.disabled=true; show.disabled=true; }
+  const start=$('#startBtn'), show=$('#showBtn'), nb=$('#newBtn');
+  const warm=(state.phase==='warm'), showThree=(mode!=='result'), dis=(mode==='run');
+  start.style.display=showThree?'':'none'; show.style.display=(showThree&&warm)?'':'none'; nb.style.display=showThree?'':'none';
+  start.disabled=dis; show.disabled=dis; nb.disabled=dis;
+}
+// Swap the current puzzle for a fresh one of the SAME category (type, segment count, accel/constant); progress unchanged.
+function newGraph(){
+  const accel=cur.segs.some(s=>s.v0!==s.v1), nSeg=cur.segs.length;
+  cur=makeCur(genMotion(nSeg,cur.type,accel));
+  curX=0; hideResult(); setStatus(''); setControls('idle'); redraw(0);
 }
 function hideResult(){ $('#result').classList.remove('show','pass','fail'); }
 
@@ -460,14 +467,14 @@ function showMe(){ if(cur.phaseRun==='run')return; cur.phaseRun='demo'; setContr
     if(t<cur.T) requestAnimationFrame(d); else { cur.phaseRun='idle'; setStatus('Your turn — press Start.'); setControls('idle'); } })(t0); }
 
 function finishAttempt(){
-  cur.phaseRun='done'; cur.done=true; setStatus(''); setControls('idle');
+  cur.phaseRun='done'; cur.done=true; setStatus(''); setControls('result');
   const r=scoreAttempt(); cur.lastResult=r;
   if(state.phase==='end' && r.pass){ state.end.pass++; renderProgress(); }
   showResult(r);
 }
 
 /* ---------- results + advancing ---------- */
-function retrySame(){ hideResult(); cur.samples=[]; cur.phaseRun='idle'; curX=0; redraw(0); }
+function retrySame(){ hideResult(); cur.samples=[]; cur.phaseRun='idle'; curX=0; setControls('idle'); redraw(0); }
 function showResult(r){
   const box=$('#result'); box.classList.add('show'); box.classList.toggle('pass',r.pass); box.classList.toggle('fail',!r.pass);
   $('#rTitle').textContent = r.pass ? '✅ Nice match!' : '❌ Not quite — try again';
@@ -477,10 +484,10 @@ function showResult(r){
   const mk=(label,cls,fn)=>{ const b=document.createElement('button'); b.className='btn'+(cls?' '+cls:''); b.textContent=label; b.onclick=fn; btns.appendChild(b); };
   if(state.phase==='warm'){
     if(r.pass) mk('Continue →','',advance);
-    else { mk('Try again','',retrySame); mk('👀 Show me','sec',showMe); }
+    else { mk('Try again','',retrySame); mk('🔀 New graph','sec',newGraph); mk('👀 Show me','sec',showMe); }
   } else { // final challenges
     if(r.pass) mk(state.end.pass>=WIN_TARGET ? 'See results 🎉' : 'Next challenge →','',advance);
-    else mk('Try again','',retrySame);
+    else { mk('Try again','',retrySame); mk('🔀 New graph','sec',newGraph); }
   }
 }
 function advance(){
@@ -550,6 +557,7 @@ $('#againBtn').onclick=()=>{ $('#winModal').classList.remove('show'); state.phas
 /* ---------- wiring ---------- */
 $('#startBtn').onclick=startAttempt;
 $('#showBtn').onclick=showMe;
+$('#newBtn').onclick=newGraph;
 $('#helpBtn').onclick=()=>$('#introModal').classList.add('show');
 $('#introStart').onclick=()=>$('#introModal').classList.remove('show');
 $('#introModal').addEventListener('click',e=>{ if(e.target.id==='introModal') e.currentTarget.classList.remove('show'); });
