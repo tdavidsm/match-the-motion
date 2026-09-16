@@ -613,8 +613,8 @@ function supAppendRest(){ const e=supLastEnd(), diff=Math.min(1,SUP.elapsed/60),
 function supAppendMove(){ const e=supLastEnd(), diff=Math.min(1,SUP.elapsed/60);
   const rampD=lerp(1.1,0.7,diff), holdD=(Math.random()<0.55?lerp(0.9,0.35,diff):0);
   const Vmax=lerp(2,3,diff); let V=rnd([1,1.5,2,2.5,3].filter(v=>v<=Vmax+1e-6));
-  let dir = e.x>1.5?-1 : e.x<-1.5?1 : (Math.random()<0.5?1:-1); V*=dir;
-  if(Math.abs(e.x+V*(rampD+holdD))>8.3) V=-V;                          // keep the car on screen
+  let dir = e.x>5?-1 : e.x<-5?1 : (Math.random()<0.5?1:-1); V*=dir;     // wander widely so sitting at 0 doesn't match
+  if(Math.abs(e.x+V*(rampD+holdD))>8.3) V=-V;                          // ...but keep the car on screen
   let t0=e.t,x0=e.x; const push=(d,v0,v1)=>{ SUP.segs.push({t0,d,v0,v1,x0,kind:'move'}); x0+=(v0+v1)/2*d; t0+=d; };
   push(rampD,0,V); if(holdD>0) push(holdD,V,V); push(rampD,V,0);        // ramp up → (hold) → ramp down, back to rest
 }
@@ -634,7 +634,7 @@ function supFrame(now){ if(!SUP.on) return; const dt=Math.min(0.05,(now-SUP.last
   SUP.samples.push({t:SUP.nowT,x:curX,v:(curX-xb)/0.2});
   supEnsureAhead();
   const good=supErrorNow()<=(SUP.type==='pt'?1.3:1.0);
-  if(SUP.nowT>SUP.graceUntil) SUP.health=clamp(SUP.health+(good?22:-45)*dt,0,100);
+  if(SUP.nowT>SUP.graceUntil) SUP.health=clamp(SUP.health+(good?18:-55)*dt,0,100);
   supDraw();
   if(SUP.health<=0){ supEnd(); return; }
   SUP.raf=requestAnimationFrame(supFrame);
