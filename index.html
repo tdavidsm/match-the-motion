@@ -153,7 +153,7 @@
       <li><b>Velocity–time:</b> the car should <i>move at each speed</i> for each part. Start anywhere — only the speeds matter.</li>
       <li>Get about <b>60%</b> or better to pass. Use <b>Show me</b> in warm-ups to watch the correct motion.</li>
     </ul>
-    <p><b>To win:</b> pass one position–time and one velocity–time warm-up, then match <b>3 of 4</b> graphs in the final round.</p>
+    <p><b>To win:</b> pass <b>two</b> position–time and <b>two</b> velocity–time warm-ups, then clear <b>7</b> three-part challenges.</p>
     <button class="btn" id="introStart">Let's go 🚀</button>
   </div>
 </div>
@@ -202,8 +202,8 @@ let SCN={w:0,h:0,cx:0,scale:1,groundY:0};
 let stars=null, starsW=0;
 
 /* ---------- state ---------- */
-const state={ phase:'warm_pt', ptDone:false, vtDone:false,
-  end:{i:0,pass:0,fail:0,graphs:[]} };
+const WIN_TARGET=7;
+const state={ phase:'warm', warmSeq:['pt','pt','vt','vt'], warmI:0, end:{pass:0} };
 let cur=null;            // current target + run data
 let curX=0;              // car world position
 let pointerDown=false, pointerWorldX=0;
@@ -416,7 +416,7 @@ sceneCv.addEventListener('pointercancel',()=>{ pointerDown=false; });
 function setStatus(t,big){ const s=$('#status'); s.textContent=t; s.classList.toggle('big',!!big); }
 function setControls(mode){
   const start=$('#startBtn'), show=$('#showBtn');
-  const warm=(state.phase==='warm_pt'||state.phase==='warm_vt');
+  const warm=(state.phase==='warm');
   if(mode==='idle'){ start.style.display=''; start.disabled=false; show.style.display=warm?'':'none'; show.disabled=false; }
   else { start.disabled=true; show.disabled=true; }
 }
@@ -442,64 +442,57 @@ function showMe(){ if(cur.phaseRun==='run')return; cur.phaseRun='demo'; setContr
 function finishAttempt(){
   cur.phaseRun='done'; cur.done=true; setStatus(''); setControls('idle');
   const r=scoreAttempt(); cur.lastResult=r;
-  if(state.phase==='end'){ if(r.pass) state.end.pass++; else state.end.fail++; renderProgress(); }
+  if(state.phase==='end' && r.pass){ state.end.pass++; renderProgress(); }
   showResult(r);
 }
 
 /* ---------- results + advancing ---------- */
+function retrySame(){ hideResult(); cur.samples=[]; cur.phaseRun='idle'; curX=0; redraw(0); }
 function showResult(r){
   const box=$('#result'); box.classList.add('show'); box.classList.toggle('pass',r.pass); box.classList.toggle('fail',!r.pass);
   $('#rTitle').textContent = r.pass ? '✅ Nice match!' : '❌ Not quite — try again';
-  $('#rScore').textContent = 'Match score: '+r.score+'%'+(r.pass?'':'  (need 60%)');
+  $('#rScore').textContent = 'Match score: '+r.score+'%'+(r.pass?'':'  (need 60%)')
+    + (state.phase==='end' ? '   ·   Cleared '+state.end.pass+' / '+WIN_TARGET : '');
   const btns=$('#rBtns'); btns.innerHTML='';
   const mk=(label,cls,fn)=>{ const b=document.createElement('button'); b.className='btn'+(cls?' '+cls:''); b.textContent=label; b.onclick=fn; btns.appendChild(b); };
-  if(state.phase==='warm_pt'||state.phase==='warm_vt'){
-    if(r.pass){ mk('Continue →','',advance); }
-    else { mk('Try again','',()=>{ hideResult(); cur.samples=[]; cur.phaseRun='idle'; curX=0; redraw(0); }); mk('👀 Show me','sec',showMe); }
-  } else {
-    if(state.end.pass>=3){ mk('See results 🎉','',advance); }
-    else if(state.end.fail>=2){ mk('Round over →','',advance); }
-    else { mk('Next graph →','',advance); }
+  if(state.phase==='warm'){
+    if(r.pass) mk('Continue →','',advance);
+    else { mk('Try again','',retrySame); mk('👀 Show me','sec',showMe); }
+  } else { // final challenges
+    if(r.pass) mk(state.end.pass>=WIN_TARGET ? 'See results 🎉' : 'Next challenge →','',advance);
+    else mk('Try again','',retrySame);
   }
 }
 function advance(){
   hideResult();
-  if(state.phase==='warm_pt'){ state.ptDone=true; state.phase='warm_vt'; loadTask(); }
-  else if(state.phase==='warm_vt'){ state.vtDone=true; startEndRound(); }
-  else if(state.phase==='end'){
-    if(state.end.pass>=3){ showWin(); return; }
-    if(state.end.fail>=2){ roundLost(); return; }
-    state.end.i++; loadTask();
-  }
+  if(state.phase==='warm'){ state.warmI++; if(state.warmI>=state.warmSeq.length) startFinal(); else loadTask(); }
+  else if(state.phase==='end'){ if(state.end.pass>=WIN_TARGET){ showWin(); return; } loadTask(); }
 }
-function startEndRound(){ state.phase='end'; state.end={i:0,pass:0,fail:0,
-  graphs:[0,1,2,3].map(()=>genMotion(3, Math.random()<0.5?'pt':'vt'))}; loadTask(); }
-function roundLost(){
-  const box=$('#result'); box.classList.add('show','fail'); box.classList.remove('pass');
-  $('#rTitle').textContent='So close! You matched '+state.end.pass+' of 4.';
-  $('#rScore').textContent='You need 3 to win. Try a fresh final round.';
-  const btns=$('#rBtns'); btns.innerHTML='';
-  const b=document.createElement('button'); b.className='btn'; b.textContent='🔁 New final round'; b.onclick=()=>{ hideResult(); startEndRound(); }; btns.appendChild(b);
-}
+function startFinal(){ state.phase='end'; state.end={pass:0}; loadTask(); }
 
 /* ---------- task loading ---------- */
 function loadTask(){
   hideResult(); setControls('idle'); setStatus(''); curX=0;
-  if(state.phase==='warm_pt'){ cur=makeCur(genMotion(2,'pt'));
-    setTask('Warm-up 1 of 2 · Position–Time','Move the car so its position follows the line. Watch where it starts!','Position–time'); }
-  else if(state.phase==='warm_vt'){ cur=makeCur(genMotion(2,'vt'));
-    setTask('Warm-up 2 of 2 · Velocity–Time','Move the car at each speed shown. Start anywhere — only the speeds matter.','Velocity–time'); }
-  else if(state.phase==='end'){ const g=state.end.graphs[state.end.i]; cur=makeCur(g);
-    setTask('Final round · graph '+(state.end.i+1)+' of 4', g.type==='pt'?'Match the position line (including the start).':'Match each speed. Start anywhere.', g.type==='pt'?'Position–time':'Velocity–time'); }
+  if(state.phase==='warm'){ const type=state.warmSeq[state.warmI]; cur=makeCur(genMotion(2,type));
+    setTask('Warm-up '+(state.warmI+1)+' of 4 · '+(type==='pt'?'Position–Time':'Velocity–Time'),
+      type==='pt'?'Move the car so its position follows the line. Watch where it starts!':'Move the car at each speed shown. Start anywhere — only the speeds matter.',
+      type==='pt'?'Position–time':'Velocity–time'); }
+  else if(state.phase==='end'){ const type=Math.random()<0.5?'pt':'vt'; cur=makeCur(genMotion(3,type));
+    setTask('Challenge · '+state.end.pass+' of '+WIN_TARGET+' cleared',
+      type==='pt'?'Match the position line (including the start).':'Match each speed. Start anywhere.',
+      type==='pt'?'Position–time':'Velocity–time'); }
   redraw(0); renderProgress();
 }
 function setTask(title,sub,type){ $('#taskTitle').textContent=title; $('#taskSub').textContent=sub; $('#graphType').textContent=type; }
 
 function renderProgress(){
+  const done=state.phase==='warm'?state.warmSeq.slice(0,state.warmI):['pt','pt','vt','vt'];
+  const ptPass=done.filter(t=>t==='pt').length, vtPass=done.filter(t=>t==='vt').length;
+  const nowType=state.phase==='warm'?state.warmSeq[state.warmI]:null;
   const p=$('#progress'); const items=[
-    {label:'Position warm-up', st: state.ptDone?'done':(state.phase==='warm_pt'?'on':'')},
-    {label:'Velocity warm-up', st: state.vtDone?'done':(state.phase==='warm_vt'?'on':'')},
-    {label:'Final: '+(state.phase==='end'?state.end.pass:0)+' / 3', st: state.phase==='end'?'on':''}
+    {label:'Position warm-ups '+Math.min(ptPass,2)+' / 2', st: ptPass>=2?'done':(nowType==='pt'?'on':'')},
+    {label:'Velocity warm-ups '+Math.min(vtPass,2)+' / 2', st: vtPass>=2?'done':(nowType==='vt'?'on':'')},
+    {label:'Challenges '+(state.phase==='end'?state.end.pass:0)+' / '+WIN_TARGET, st: state.phase==='end'?'on':''}
   ];
   p.innerHTML=items.map((it,i)=>`<div class="pstep ${it.st}"><span class="b">${it.st==='done'?'✓':(i+1)}</span>${it.label}</div>`).join('');
 }
@@ -528,7 +521,7 @@ $('#nameField').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#codeBtn'
 $('#copyBtn').onclick=()=>{ const code=$('#codeOut').textContent;
   const done=()=>{ $('#copyBtn').textContent='Copied ✓'; setTimeout(()=>$('#copyBtn').textContent='Copy code',1400); };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done,done); else done(); };
-$('#againBtn').onclick=()=>{ $('#winModal').classList.remove('show'); state.phase='warm_pt'; state.ptDone=false; state.vtDone=false; loadTask(); };
+$('#againBtn').onclick=()=>{ $('#winModal').classList.remove('show'); state.phase='warm'; state.warmI=0; state.end={pass:0}; loadTask(); };
 
 /* ---------- wiring ---------- */
 $('#startBtn').onclick=startAttempt;

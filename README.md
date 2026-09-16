@@ -5,8 +5,8 @@ A kinematics graph-matching game. Students are shown a random **position–time*
 **▶ Play:** https://tdavidsm.github.io/match-the-motion/
 
 ## How it plays
-- **Warm-ups (must pass both):** one 2-segment **position–time** graph, then one 2-segment **velocity–time** graph. "Show me" plays the correct motion.
-- **Final round:** four 3-segment graphs (random type) — match **3 of 4** to win.
+- **Warm-ups (must pass all four):** two 2-segment **position–time** graphs and two 2-segment **velocity–time** graphs. "Show me" plays the correct motion.
+- **Final round:** endless 3-segment graphs (random type) — **clear 7** to win.
 - **Win → code:** enter your name and get an 8-character completion code with your initials in the **3rd and 6th** slots. Screenshot it (or copy it) to turn in.
 
 ## Scoring
