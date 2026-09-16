@@ -667,6 +667,8 @@ function setSuperUI(on){ $('#stopBtn').style.display=on?'':'none';
 function openSuper(){ if(SUP.on) return; $('#supBestEntry').textContent=Math.round(bestRun)+' s'; $('#superModal').classList.add('show'); }
 function startSuper(type){ $('#superModal').classList.remove('show'); $('#superOverModal').classList.remove('show');
   if(raf) cancelAnimationFrame(raf); setSuperUI(true); supReset(type);
+  setTask('🔥 Super Challenge · '+(type==='pt'?'Position–Time':'Velocity–Time'),
+    'Endless! Keep the car on the line — only hold still on the flat rests.', type==='pt'?'Position–time':'Velocity–time');
   SUP.startReal=performance.now(); SUP.lastReal=performance.now(); SUP.raf=requestAnimationFrame(supFrame); }
 function supEnd(){ if(!SUP.on) return; SUP.on=false; if(SUP.raf) cancelAnimationFrame(SUP.raf);
   const runSec=Math.max(0,(performance.now()-SUP.startReal)/1000); saveBest(runSec);
